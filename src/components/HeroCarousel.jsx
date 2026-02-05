@@ -13,7 +13,7 @@ export default function HeroCarousel() {
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentSlide((prev) => (prev + 1) % CAROUSEL_ITEMS.length);
-    }, 6000);
+    }, 9000);
     return () => clearInterval(timer);
   }, []);
 
