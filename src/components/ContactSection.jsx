@@ -85,7 +85,7 @@ _Quedo atento a su respuesta, gracias._`;
                 </div>
                 <div>
                   <p className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Email</p>
-                  <p className="font-bold text-sm">juanestebanbernalsilva2@gmail.com</p>
+                  <p className="font-bold text-sm">tye.streetcaps@gmail.com</p>
                 </div>
               </div>
             </div>
