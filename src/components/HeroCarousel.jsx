@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 const CAROUSEL_ITEMS = [
-  { title: "T&E Street Caps", subtitle: "Domina el asfalto con estilo", image: "https://images.unsplash.com/photo-1534215754734-18e55d13e346?auto=format&fit=crop&q=80&w=1200" },
-  { title: "Nueva Colección Urban", subtitle: "Diseños que hablan por ti", image: "https://images.unsplash.com/photo-1521369909029-2afed882baee?auto=format&fit=crop&q=80&w=1200" },
-  { title: "Ediciones Limitadas", subtitle: "Exclusividad en cada costura", image: "https://images.unsplash.com/photo-1556306535-0f09a537f0a3?auto=format&fit=crop&q=80&w=1200" }
+  { title: "T&E Street Caps", subtitle: "Domina el asfalto con estilo", image: "/Banner-1.png" },
+  { title: "Nueva Colección Urban", subtitle: "Diseños que hablan por ti", image: "/Gorras.png" },
+  { title: "Ediciones Limitadas", subtitle: "Exclusividad en cada costura", image: "/Limit.png" }
 ];
 
 export default function HeroCarousel() {
