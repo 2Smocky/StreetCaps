@@ -68,6 +68,9 @@ export default function App() {
   const [reservations, setReservations] = useState([]);
   const [cart, setCart] = useState([]);
 
+  const [messages, setMessages] = useState([]);      
+  const [subscribers, setSubscribers] = useState([]);
+
   // --- AUTH ---
   // --- AUTH (LÓGICA BLINDADA) ---
   useEffect(() => {
@@ -102,13 +105,17 @@ export default function App() {
   // --- DATA SYNC ---
   useEffect(() => {
     const path = (name) => collection(db, 'artifacts', appId, 'public', 'data', name);
+    
     const unsubProds = onSnapshot(path('products'), (s) => setProducts(s.docs.map(d => ({ id: d.id, ...d.data() }))));
     const unsubCols = onSnapshot(path('collections'), (s) => setCollections(s.docs.map(d => ({ id: d.id, ...d.data() }))));
     const unsubCats = onSnapshot(path('categories'), (s) => setCategories(s.docs.map(d => ({ id: d.id, ...d.data() }))));
     const unsubVisors = onSnapshot(path('visors'), (s) => setVisors(s.docs.map(d => ({ id: d.id, ...d.data() }))));
     const unsubRes = onSnapshot(path('reservations'), (s) => setReservations(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+    const unsubMsgs = onSnapshot(path('messages'), (s) => setMessages(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+    const unsubSubs = onSnapshot(path('subscribers'), (s) => setSubscribers(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+
     setIsLoading(false);
-    return () => { unsubProds(); unsubCols(); unsubCats(); unsubVisors(); unsubRes(); };
+    return () => { unsubProds(); unsubCols(); unsubCats(); unsubVisors(); unsubRes(); unsubMsgs(); unsubSubs(); };
   }, []);
 
   // --- LÓGICA DE CARRITO ---
@@ -236,6 +243,8 @@ export default function App() {
           categories={categories}
           visors={visors}
           reservations={reservations}
+          messages={messages}   
+          subscribers={subscribers}
           showToast={showToast}  // <--- AGREGADO
         />
       )}
@@ -262,7 +271,7 @@ export default function App() {
       />
 
       {/* Componente Footer */}
-      <Footer />
+      <Footer db={db} appId={appId} />
     </div>
   );
 }
