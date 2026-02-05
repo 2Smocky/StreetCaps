@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+// Eliminé la importación de 'lucide-react' ya que no usaremos las flechas
 
 const CAROUSEL_ITEMS = [
   { title: "T&E Street Caps", subtitle: "Domina el asfalto con estilo", image: "/Banner-1.png" },
@@ -34,8 +34,6 @@ export default function HeroCarousel() {
           </div>
         </div>
       ))}
-      <button onClick={() => setCurrentSlide(prev => (prev === 0 ? CAROUSEL_ITEMS.length - 1 : prev - 1))} className="absolute left-6 top-1/2 -translate-y-1/2 z-20 p-3 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-full text-white transition cursor-pointer outline-none"><ChevronLeft size={24} /></button>
-      <button onClick={() => setCurrentSlide(prev => (prev + 1) % CAROUSEL_ITEMS.length)} className="absolute right-6 top-1/2 -translate-y-1/2 z-20 p-3 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-full text-white transition cursor-pointer outline-none"><ChevronRight size={24} /></button>
     </section>
   );
 }
