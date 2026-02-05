@@ -1,26 +1,20 @@
 // src/components/ProductCard.jsx
 import React from 'react';
 import { Plus, Bell } from 'lucide-react';
-import { formatImageUrl, formatCOP } from '../utils'; // Importamos las utilidades
+import { formatImageUrl, formatCOP } from '../utils';
 
 export default function ProductCard({ product, addToCart, onReserve }) {
   
-  // --- LÓGICA DE EXPIRACIÓN ---
-  // Verificamos si tiene descuento Y si la fecha aún es válida
   const hasValidDiscount = product.discount > 0 && (
-    !product.discountExpiry || // Si no tiene fecha, es permanente (válido)
-    new Date(product.discountExpiry) > new Date() // Si tiene fecha, ¿es mayor que ahora?
+    !product.discountExpiry || 
+    new Date(product.discountExpiry) > new Date()
   );
 
-  // Usamos esa variable para calcular precio y mostrar etiquetas
   const isOutOfStock = product.stock === 0;
   const finalPrice = hasValidDiscount 
     ? product.price * (1 - (product.discount || 0) / 100) 
     : product.price;
 
-  
-
-  // Lógica para mostrar el tipo de ajuste
   const getFitType = (cat) => {
     if (['Snapback', 'Trucker', 'Strapback'].some(t => cat.includes(t))) return ' AJUSTABLE';
     if (cat.includes('Fitted')) return ' CERRADA';
@@ -29,17 +23,30 @@ export default function ProductCard({ product, addToCart, onReserve }) {
 
   return (
     <div className="relative group flex flex-col h-full text-black">
-      <div className="relative aspect-[4/5] overflow-hidden bg-zinc-100 rounded-3xl mb-4 shadow-sm">
+      
+      {/* 1. Mantenemos aspect-[4/3]
+         2. AGREGAMOS 'p-6': Esto añade espacio interno para que la gorra no se vea gigante.
+         3. AGREGAMOS 'flex items-center justify-center': Para centrar la imagen perfectamente.
+      */}
+      <div className="relative aspect-[4/3] overflow-hidden bg-zinc-100 rounded-3xl mb-4 shadow-sm p-6 flex items-center justify-center">
+        
         {isOutOfStock && (
           <div className="absolute inset-0 z-10 bg-white/40 backdrop-blur-sm flex items-center justify-center text-center">
             <span className="text-3xl font-black text-zinc-900/40 uppercase -rotate-12 border-4 border-zinc-900/40 px-6 py-2 rounded-2xl tracking-tighter">Agotado</span>
           </div>
         )}
+        
+        {/* CAMBIO CLAVE:
+           - Usamos 'object-contain' en vez de 'object-cover'. 
+             Esto fuerza a que la gorra se vea completa dentro del espacio, normalizando el tamaño visual.
+           - 'mix-blend-multiply': Hace que el fondo blanco de la foto se vuelva transparente sobre el gris.
+        */}
         <img 
           src={formatImageUrl(product.image)} 
           alt={product.name} 
-          className={`w-full h-full object-cover transition-transform duration-700 ${isOutOfStock ? 'grayscale' : 'group-hover:scale-110'}`} 
+          className={`max-w-full max-h-full object-contain mix-blend-multiply transition-transform duration-700 ${isOutOfStock ? 'grayscale' : 'group-hover:scale-110'}`} 
         />
+        
         <div className="absolute top-4 left-4 flex flex-col gap-2 z-20">
           {hasValidDiscount && <span className="bg-red-600 text-white text-[10px] font-black px-3 py-1.5 rounded-lg shadow-xl shadow-red-900/20">-{product.discount}% OFF</span>}
           <span className="bg-black text-white text-[10px] font-bold px-3 py-1.5 rounded-lg shadow-xl uppercase tracking-wider">{product.collection}</span>
@@ -48,7 +55,6 @@ export default function ProductCard({ product, addToCart, onReserve }) {
       
       <div className="flex-1 flex flex-col px-1">
         <div className="flex justify-between items-center mb-1 text-black">
-          {/* AQUÍ ESTÁ TU LÓGICA DE AJUSTABLE */}
           <span className="text-[10px] text-zinc-400 font-black uppercase tracking-widest">
             {product.type} • {getFitType(product.category)} {product.size ? `• ${product.size}` : ''}
           </span>

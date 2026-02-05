@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, onSnapshot } from 'firebase/firestore';
-import { Search, Filter, Loader2 } from 'lucide-react';
+import { Search, Filter, Loader2, ChevronDown } from 'lucide-react';
 
 // IMPORTAR TUS COMPONENTES (Nuevos y Viejos)
 import Navbar from './components/Navbar';
@@ -68,7 +68,9 @@ export default function App() {
   const [reservations, setReservations] = useState([]);
   const [cart, setCart] = useState([]);
 
-  const [messages, setMessages] = useState([]);      
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+
+  const [messages, setMessages] = useState([]);
   const [subscribers, setSubscribers] = useState([]);
 
   // --- AUTH ---
@@ -79,11 +81,11 @@ export default function App() {
       if (u) {
         // CASO 1: Firebase encontró un usuario (Admin o Anónimo existente)
         setUser(u);
-        
+
         // Solo forzamos la vista Admin si es la PRIMERA carga (isLoading es true)
         // Esto evita que si vas a "Inicio", te devuelva al Admin de golpe.
         if (!u.isAnonymous && isLoading) {
-           setView('admin');
+          setView('admin');
         }
       } else {
         // CASO 2: No hay usuario en absoluto (Primera vez que entra un cliente)
@@ -94,7 +96,7 @@ export default function App() {
           console.error("Error creando anónimo:", error);
         }
       }
-      
+
       // Terminó la carga inicial
       setIsLoading(false);
     });
@@ -105,7 +107,7 @@ export default function App() {
   // --- DATA SYNC ---
   useEffect(() => {
     const path = (name) => collection(db, 'artifacts', appId, 'public', 'data', name);
-    
+
     const unsubProds = onSnapshot(path('products'), (s) => setProducts(s.docs.map(d => ({ id: d.id, ...d.data() }))));
     const unsubCols = onSnapshot(path('collections'), (s) => setCollections(s.docs.map(d => ({ id: d.id, ...d.data() }))));
     const unsubCats = onSnapshot(path('categories'), (s) => setCategories(s.docs.map(d => ({ id: d.id, ...d.data() }))));
@@ -196,10 +198,13 @@ export default function App() {
                   </div>
                   <div className="flex items-center bg-white border border-zinc-200 rounded-2xl px-4 py-3">
                     <Filter size={16} className="mr-2 text-zinc-400" />
-                    <select className="bg-transparent outline-none text-sm font-bold uppercase cursor-pointer" value={filter} onChange={(e) => setFilter(e.target.value)}>
+                    <select
+                      className="bg-transparent border-none outline-none focus:ring-0 text-sm font-bold uppercase cursor-pointer appearance-none" // <-- AÑADE 'appearance-none' AQUÍ
+                      value={filter}
+                      onChange={(e) => setFilter(e.target.value)}
+                    >
                       <option value="all">Filtros</option>
                       <option value="bestsellers">Más Vendidas</option>
-                      <option value="out-of-stock">Agotadas</option>
                       {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                     </select>
                   </div>
@@ -243,7 +248,7 @@ export default function App() {
           categories={categories}
           visors={visors}
           reservations={reservations}
-          messages={messages}   
+          messages={messages}
           subscribers={subscribers}
           showToast={showToast}  // <--- AGREGADO
         />
