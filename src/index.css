@@ -1,0 +1,10 @@
+@import "tailwindcss";
+
+/* Esta línea vincula tu archivo de configuración para que Tailwind reconozca tus clases */
+@config "../tailwind.config.js";
+
+body {
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden;
+}
