@@ -190,7 +190,7 @@ export default function App() {
                   <div className="flex items-center bg-white border border-zinc-200 rounded-2xl px-4 py-3">
                     <Filter size={16} className="mr-2 text-zinc-400" />
                     <select className="bg-transparent outline-none text-sm font-bold uppercase cursor-pointer" value={filter} onChange={(e) => setFilter(e.target.value)}>
-                      <option value="all">Filtros Pro</option>
+                      <option value="all">Filtros</option>
                       <option value="bestsellers">Más Vendidas</option>
                       <option value="out-of-stock">Agotadas</option>
                       {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
