@@ -9,6 +9,7 @@ import {
   Tag, Percent, RefreshCcw, EyeOff, Send, Inbox, Menu
 } from 'lucide-react';
 import { formatImageUrl, formatCOP } from '../utils';
+import ImageUploader from './ImageUploader';
 
 export default function AdminPanel({
   db,
@@ -30,6 +31,10 @@ export default function AdminPanel({
     size: "", price: "", stock: 1, discount: 0, image: "",
     isHidden: false
   });
+
+  const [isUploading, setIsUploading] = useState(false);
+
+  const [fileToUpload, setFileToUpload] = useState(null);
 
   const [editingId, setEditingId] = useState(null);
   const [notifySubscribers, setNotifySubscribers] = useState(false);
@@ -66,85 +71,94 @@ export default function AdminPanel({
   // =================================================================
   const handleSaveProduct = async (e) => {
     e.preventDefault();
+
+    // 1. Validaciones iniciales
+    if (!newProduct.name || !newProduct.brand || !newProduct.price || !newProduct.collection) {
+      return showToast("Por favor completa los campos obligatorios", "error");
+    }
+
+    // 2. Bloquear interfaz para evitar doble click
+    setIsUploading(true);
+
     try {
+      let finalImageUrl = newProduct.image;
+
+      // --- PASO 1: SUBIR IMAGEN A CLOUDINARY (Solo si hay un archivo local seleccionado) ---
+      if (fileToUpload) {
+        try {
+          // La subida ocurre aquí de forma silenciosa, el botón mostrará el estado de carga
+          finalImageUrl = await uploadImageToCloudinary(fileToUpload);
+        } catch (uploadError) {
+          console.error("Error en Cloudinary:", uploadError);
+          setIsUploading(false);
+          return showToast("Error al subir la imagen a la nube", "error");
+        }
+      }
+
+      // --- PASO 2: PREPARAR OBJETO PARA FIREBASE ---
       const productData = {
         ...newProduct,
-        image: formatImageUrl(newProduct.image),
+        image: formatImageUrl(finalImageUrl),
         price: parseFloat(newProduct.price),
         stock: parseInt(newProduct.stock),
         discount: parseInt(newProduct.discount) || 0,
         isHidden: newProduct.isHidden,
+        // Si editamos no sobreescribimos creación; si es nuevo, inicializamos
         ...(editingId ? {} : { sales: 0, createdAt: new Date().toISOString() })
       };
 
+      // --- PASO 3: GUARDAR EN FIRESTORE ---
       if (editingId) {
+        // MODO EDICIÓN
         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', editingId), productData);
         setEditingId(null);
-        showToast("Producto editado correctamente");
+        showToast("Producto editado correctamente", "success");
       } else {
+        // MODO CREACIÓN
         await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'products'), productData);
-        showToast("Producto agregado correctamente");
+        showToast("Producto agregado correctamente", "success");
 
-        // LÓGICA DE NOTIFICACIÓN REAL (CONECTADA A LA EXTENSIÓN)
+        // --- PASO 4: NOTIFICACIONES POR CORREO (Solo productos nuevos) ---
         if (notifySubscribers) {
           if (subscribers.length === 0) {
             showToast("No hay suscriptores para notificar", "error");
           } else {
             const mailBatch = writeBatch(db);
+
             subscribers.forEach(sub => {
-              // Usamos la colección raíz 'mail' que configuraste en la extensión
               const mailRef = doc(collection(db, "mail"));
-              const imgUrl = formatImageUrl(newProduct.image);
+              const imgUrl = formatImageUrl(finalImageUrl);
 
               mailBatch.set(mailRef, {
                 to: sub.email,
                 message: {
                   subject: `🔥 DROP ALERT: ${newProduct.name} ya está aquí`,
-                  text: `Hola! Acaba de llegar la ${newProduct.name} a T&E Street Caps. Es una edición especial de ${newProduct.brand}. Precio: ${formatCOP(parseFloat(newProduct.price))}. Cómprala aquí: https://testreetcaps.com`,
+                  text: `Hola! Acaba de llegar la ${newProduct.name} a T&E Street Caps. Precio: ${formatCOP(parseFloat(newProduct.price))}. Cómprala aquí: https://testreetcaps.com`,
                   html: `
-      <!DOCTYPE html>
-      <html>
-      <body style="margin: 0; padding: 0; background-color: #f4f4f5; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;">
-        
-        <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; margin-top: 20px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-          
-          <div style="background-color: #000000; padding: 20px; text-align: center;">
-            <p style="color: #ffffff; font-weight: 900; letter-spacing: 4px; margin: 0; font-size: 14px; text-transform: uppercase;">T&E STREET CAPS</p>
-          </div>
-
-          <div style="background-color: #f8f8f8; padding: 40px 0; text-align: center;">
-            <img src="${imgUrl}" alt="${newProduct.name}" style="width: 80%; max-width: 400px; height: auto; object-fit: contain; display: block; margin: 0 auto; mix-blend-mode: multiply;">
-          </div>
-
-          <div style="padding: 40px 30px; text-align: center;">
-            <span style="background-color: #eff6ff; color: #2563eb; font-size: 10px; font-weight: 800; padding: 6px 12px; border-radius: 20px; text-transform: uppercase; letter-spacing: 1px;">Nuevo Stock</span>
-            
-            <h1 style="color: #111111; font-size: 28px; font-weight: 900; margin-top: 20px; margin-bottom: 10px; line-height: 1.2; text-transform: uppercase;">${newProduct.name}</h1>
-            
-            <p style="color: #666666; font-size: 16px; margin: 0 0 25px 0;">
-              La espera terminó. El modelo oficial de <strong>${newProduct.brand}</strong> ya está disponible en nuestra tienda. Unidades limitadas.
-            </p>
-
-            <p style="color: #111111; font-size: 24px; font-weight: 800; margin: 0 0 30px 0;">
-              ${formatCOP(parseFloat(newProduct.price))}
-            </p>
-
-            <a href="https://testreetcaps.com/#catalogo" style="background-color: #000000; color: #ffffff; padding: 18px 40px; text-decoration: none; border-radius: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 2px; font-size: 14px; display: inline-block;">
-              Comprar Ahora
-            </a>
-          </div>
-
-          <div style="background-color: #fafafa; padding: 20px; text-align: center; border-top: 1px solid #eeeeee;">
-            <p style="color: #999999; font-size: 11px; margin: 0;">
-              © ${new Date().getFullYear()} T&E Street Caps. Todos los derechos reservados.<br>
-              Elevando la cultura del streetwear.
-            </p>
-          </div>
-
-        </div>
-      </body>
-      </html>
-    `
+                  <!DOCTYPE html>
+                  <html>
+                  <body style="margin: 0; padding: 0; background-color: #f4f4f5; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;">
+                    <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; margin-top: 20px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                      <div style="background-color: #000000; padding: 20px; text-align: center;">
+                        <p style="color: #ffffff; font-weight: 900; letter-spacing: 4px; margin: 0; font-size: 14px; text-transform: uppercase;">T&E STREET CAPS</p>
+                      </div>
+                      <div style="background-color: #f8f8f8; padding: 40px 0; text-align: center;">
+                        <img src="${imgUrl}" alt="${newProduct.name}" style="width: 80%; max-width: 400px; height: auto; object-fit: contain; display: block; margin: 0 auto; mix-blend-mode: multiply;">
+                      </div>
+                      <div style="padding: 40px 30px; text-align: center;">
+                        <span style="background-color: #eff6ff; color: #2563eb; font-size: 10px; font-weight: 800; padding: 6px 12px; border-radius: 20px; text-transform: uppercase; letter-spacing: 1px;">Nuevo Stock</span>
+                        <h1 style="color: #111111; font-size: 28px; font-weight: 900; margin-top: 20px; margin-bottom: 10px; line-height: 1.2; text-transform: uppercase;">${newProduct.name}</h1>
+                        <p style="color: #666666; font-size: 16px; margin: 0 0 25px 0;">La espera terminó. El modelo oficial de <strong>${newProduct.brand}</strong> ya está disponible en nuestra tienda.</p>
+                        <p style="color: #111111; font-size: 24px; font-weight: 800; margin: 0 0 30px 0;">${formatCOP(parseFloat(newProduct.price))}</p>
+                        <a href="https://testreetcaps.com/#catalogo" style="background-color: #000000; color: #ffffff; padding: 18px 40px; text-decoration: none; border-radius: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 2px; font-size: 14px; display: inline-block;">Comprar Ahora</a>
+                      </div>
+                      <div style="background-color: #fafafa; padding: 20px; text-align: center; border-top: 1px solid #eeeeee;">
+                        <p style="color: #999999; font-size: 11px; margin: 0;">© ${new Date().getFullYear()} T&E Street Caps. Todos los derechos reservados.</p>
+                      </div>
+                    </div>
+                  </body>
+                  </html>
+                `
                 }
               });
             });
@@ -154,15 +168,33 @@ export default function AdminPanel({
         }
       }
 
+      // --- PASO 5: LIMPIEZA Y RESETEO ---
       setNewProduct({ name: "", brand: "", collection: "", category: "", type: "", size: "", price: "", stock: 1, discount: 0, image: "", isHidden: false });
+      setFileToUpload(null);
       setNotifySubscribers(false);
-      // En móvil no hacemos scroll automático tan agresivo para no perder el contexto
+
       if (window.innerWidth > 768) window.scrollTo({ top: 500, behavior: 'smooth' });
 
     } catch (err) {
-      console.error(err);
-      showToast("Error al guardar producto", "error");
+      console.error("Error al guardar:", err);
+      showToast("Error al guardar el producto", "error");
+    } finally {
+      // Liberamos el botón
+      setIsUploading(false);
     }
+  };
+
+  const uploadImageToCloudinary = async (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', 'productos_preset'); // Tu preset unsigned
+
+    const res = await fetch(
+      `https://api.cloudinary.com/v1_1/dl0ds7egv/image/upload`, // Tu Cloud Name
+      { method: 'POST', body: formData }
+    );
+    const data = await res.json();
+    return data.secure_url; // Retorna el link final
   };
 
   const startEditing = (product) => {
@@ -411,34 +443,84 @@ export default function AdminPanel({
               <h2 className="text-xl font-black mb-8 flex items-center gap-3 uppercase tracking-tight leading-none">{editingId ? <Pencil className="text-orange-500" /> : <Plus className="text-blue-600" />} {editingId ? "Editar" : "Nuevo Ingreso"}</h2>
 
               <form className="space-y-6" onSubmit={handleSaveProduct}>
+
                 <div className="space-y-4">
-                  <div className="space-y-1"><label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest ml-1">Modelo</label><input className="w-full border border-zinc-100 bg-zinc-50 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none font-bold text-black" value={newProduct.name} onChange={e => setNewProduct({ ...newProduct, name: e.target.value })} required /></div>
+
+                  {/* --- FILA 1: MODELO Y MARCA --- */}
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1"><label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest ml-1">Marca</label><input className="w-full border border-zinc-100 bg-zinc-50 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none font-bold text-black" value={newProduct.brand} onChange={e => setNewProduct({ ...newProduct, brand: e.target.value })} required /></div>
-                    <div className="space-y-1"><label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest ml-1">Talla</label><input className="w-full border border-zinc-100 bg-zinc-50 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none font-bold text-black" value={newProduct.size} onChange={e => setNewProduct({ ...newProduct, size: e.target.value })} /></div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest ml-1">Modelo</label>
+                      <input className="w-full border border-zinc-100 bg-zinc-50 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none font-bold text-black" value={newProduct.name} onChange={e => setNewProduct({ ...newProduct, name: e.target.value })} required />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest ml-1">Marca</label>
+                      <input className="w-full border border-zinc-100 bg-zinc-50 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none font-bold text-black" value={newProduct.brand} onChange={e => setNewProduct({ ...newProduct, brand: e.target.value })} required />
+                    </div>
                   </div>
+
+                  {/* --- FILA 2: VISERA Y CATEGORÍA (AHORA ESTÁ ARRIBA) --- */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest ml-1">Visera</label>
+                      <select className="w-full border border-zinc-100 bg-zinc-50 rounded-xl px-4 py-3 text-sm outline-none font-bold cursor-pointer text-black" value={newProduct.type} onChange={e => setNewProduct({ ...newProduct, type: e.target.value })} required>
+                        <option value="">...</option>
+                        {visors.map(v => <option key={v.id} value={v.name}>{v.name}</option>)}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest ml-1">Categoría</label>
+                      <select className="w-full border border-zinc-100 bg-zinc-50 rounded-xl px-4 py-3 text-sm outline-none font-bold cursor-pointer text-black" value={newProduct.category} onChange={e => setNewProduct({ ...newProduct, category: e.target.value })} required>
+                        <option value="">...</option>
+                        {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* --- FILA 3: COLECCIÓN (75%) Y TALLA (25%) (AHORA ESTÁ ABAJO) --- */}
+                  <div className="grid grid-cols-4 gap-4">
+                    <div className="col-span-3 space-y-1">
+                      <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest ml-1">Colección / Drop</label>
+                      <select className="w-full border border-zinc-100 bg-zinc-50 rounded-xl px-4 py-3 text-sm outline-none font-bold cursor-pointer text-black" value={newProduct.collection} onChange={e => setNewProduct({ ...newProduct, collection: e.target.value })} required>
+                        <option value="">Seleccionar...</option>
+                        {collections.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                      </select>
+                    </div>
+                    <div className="col-span-1 space-y-1">
+                      <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest ml-1">Talla</label>
+                      <input className="w-full border border-zinc-100 bg-zinc-50 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none font-bold text-black text-center" placeholder="Ej: L" value={newProduct.size} onChange={e => setNewProduct({ ...newProduct, size: e.target.value })} />
+                    </div>
+                  </div>
+
                 </div>
 
-                <div className="space-y-1"><label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest ml-1">Colección / Drop</label>
-                  <select className="w-full border border-zinc-100 bg-zinc-50 rounded-xl px-4 py-3 text-sm outline-none font-bold cursor-pointer text-black" value={newProduct.collection} onChange={e => setNewProduct({ ...newProduct, collection: e.target.value })} required>
-                    <option value="">Seleccionar...</option>
-                    {collections.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-                  </select>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1"><label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest ml-1">Visera</label><select className="w-full border border-zinc-100 bg-zinc-50 rounded-xl px-4 py-3 text-sm outline-none font-bold cursor-pointer text-black" value={newProduct.type} onChange={e => setNewProduct({ ...newProduct, type: e.target.value })} required><option value="">...</option>{visors.map(v => <option key={v.id} value={v.name}>{v.name}</option>)}</select></div>
-                  <div className="space-y-1"><label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest ml-1">Categoría</label><select className="w-full border border-zinc-100 bg-zinc-50 rounded-xl px-4 py-3 text-sm outline-none font-bold cursor-pointer text-black" value={newProduct.category} onChange={e => setNewProduct({ ...newProduct, category: e.target.value })} required><option value="">...</option>{categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}</select></div>
-                </div>
-
+                {/* --- FILA 4: PRECIOS Y STOCK --- */}
                 <div className="grid grid-cols-3 gap-3 font-bold text-black">
                   <div className="space-y-1"><label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest ml-1">Precio</label><input type="number" step="1" className="w-full border border-zinc-100 bg-zinc-50 rounded-xl px-3 py-3 text-sm outline-none font-bold text-black" value={newProduct.price} onChange={e => setNewProduct({ ...newProduct, price: e.target.value })} required /></div>
                   <div className="space-y-1"><label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest ml-1">Stock</label><input type="number" min="1" className="w-full border border-zinc-100 bg-zinc-50 rounded-xl px-3 py-3 text-sm outline-none font-bold text-black" value={newProduct.stock} onChange={e => setNewProduct({ ...newProduct, stock: e.target.value })} required /></div>
                   <div className="space-y-1"><label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest ml-1">Dcto%</label><input type="number" className="w-full border border-zinc-100 bg-zinc-50 rounded-xl px-3 py-3 text-sm outline-none font-bold text-black" value={newProduct.discount} onChange={e => setNewProduct({ ...newProduct, discount: e.target.value })} /></div>
                 </div>
 
-                <div className="space-y-1 text-black"><label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest ml-1">Drive Link Imagen</label><input className="w-full border border-zinc-100 bg-zinc-50 rounded-xl px-4 py-3 text-sm outline-none font-bold text-black" value={newProduct.image} onChange={e => setNewProduct({ ...newProduct, image: e.target.value })} required /></div>
+                {/* --- SECCIÓN IMAGEN --- */}
+                <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-100 flex gap-4 items-center">
+                  <div className="flex-1 space-y-2">
+                    <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest flex items-center gap-2">
+                      📸 Imagen del Producto
+                    </label>
+                    <ImageUploader
+                      onFileSelect={(file, previewUrl) => {
+                        setFileToUpload(file); // Guardamos el archivo real para después
+                        setNewProduct(prev => ({ ...prev, image: previewUrl })); // Mostramos la preview local
+                      }}
+                    />
+                  </div>
+                  {newProduct.image && (
+                    <div className="flex-shrink-0">
+                      <img src={newProduct.image} alt="Preview" className="w-16 h-16 rounded-lg border border-zinc-200 object-cover bg-white shadow-sm" />
+                    </div>
+                  )}
+                </div>
 
+                {/* --- OPCIONES EXTRA --- */}
                 <div className="space-y-3 bg-zinc-50 p-4 rounded-xl border border-zinc-100">
                   <div className="flex items-center gap-3">
                     <input type="checkbox" id="hideProduct" checked={newProduct.isHidden} onChange={e => setNewProduct({ ...newProduct, isHidden: e.target.checked })} className="w-5 h-5 accent-black cursor-pointer" />
@@ -452,9 +534,23 @@ export default function AdminPanel({
                   )}
                 </div>
 
+                {/* --- BOTONES --- */}
                 <div className="flex gap-2">
                   {editingId && <button type="button" onClick={cancelEditing} className="w-1/3 bg-zinc-200 text-black font-black py-5 rounded-2xl hover:bg-zinc-300 transition-all cursor-pointer outline-none uppercase tracking-widest text-xs">Cancelar</button>}
-                  <button type="submit" className={`w-full text-white font-black py-5 rounded-2xl transition-all shadow-xl cursor-pointer outline-none uppercase tracking-widest text-xs ${editingId ? "bg-orange-500 hover:bg-orange-600 shadow-orange-200" : "bg-blue-600 hover:bg-blue-700 shadow-blue-200"}`}>{editingId ? "Guardar Cambios" : "Publicar"}</button>
+                  <button
+                    type="submit"
+                    disabled={isUploading} // Bloquear para evitar doble click
+                    className={`w-full text-white font-black py-5 rounded-2xl transition-all shadow-xl cursor-pointer outline-none uppercase tracking-widest text-xs flex justify-center items-center gap-2
+      ${editingId ? "bg-orange-500 hover:bg-orange-600 shadow-orange-200" : "bg-blue-600 hover:bg-blue-700 shadow-blue-200"}
+      ${isUploading ? "opacity-75 cursor-wait" : ""}
+    `}
+                  >
+                    {/* Lógica del texto del botón */}
+                    {isUploading
+                      ? "⏳ Subiendo y Guardando..."
+                      : (editingId ? "Guardar Cambios" : "Publicar")
+                    }
+                  </button>
                 </div>
               </form>
             </div>
